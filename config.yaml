@@ -1,0 +1,56 @@
+# sensing-player configuration
+
+server:
+  host: 127.0.0.1
+  port: 8080
+
+sensor:
+  # HTTP endpoint of your local WiFi sensing device.
+  # Expected JSON response shape:
+  #   { "people_count": 3, "activity": "walking", "confidence": 0.9 }
+  endpoint: http://localhost:8000/detected
+  poll_interval: 2s
+  timeout_seconds: 5
+
+chrome:
+  # Leave blank to auto-detect Chrome/Chromium on the system.
+  executable_path: ""
+  kiosk_mode: true
+  flags:
+    - "--disable-extensions"
+    - "--disable-popup-blocking"
+
+# Define all available ads.
+# url can be:
+#   - An absolute URL:     https://example.com/ad.mp4
+#   - A local video file:  ads/promo.mp4   (served relative to the working directory)
+ads:
+  default:
+    label: "Default Ad"
+    url: "https://www.w3schools.com/html/mov_bbb.mp4"
+
+  small_crowd:
+    label: "Small Crowd Ad"
+    url: "https://www.w3schools.com/html/movie.mp4"
+
+  large_crowd:
+    label: "Large Crowd Ad"
+    url: "https://www.w3schools.com/html/mov_bbb.mp4"
+
+# Ad selection rules (evaluated in order, first match wins).
+# min_people / max_people: use -1 for "no bound".
+rules:
+  - min_people: 0
+    max_people: 0
+    ad_key: default       # no one detected -> default/screensaver ad
+
+  - min_people: 1
+    max_people: 3
+    ad_key: small_crowd   # 1-3 people
+
+  - min_people: 4
+    max_people: -1
+    ad_key: large_crowd   # 4+ people
+
+# Shown on startup and when no rule matches.
+default_ad_key: default

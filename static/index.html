@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ad Player</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #player {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* Crossfade overlay for smooth transitions */
+    #overlay {
+      position: absolute;
+      inset: 0;
+      background: #000;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      pointer-events: none;
+    }
+
+    #overlay.fading {
+      opacity: 1;
+    }
+
+    #status {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      color: rgba(255,255,255,0.35);
+      font-family: monospace;
+      font-size: 12px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="player">
+    <video id="video" autoplay muted loop playsinline></video>
+    <div id="overlay"></div>
+    <div id="status">connecting...</div>
+  </div>
+
+  <script>
+    const video   = document.getElementById('video');
+    const overlay = document.getElementById('overlay');
+    const status  = document.getElementById('status');
+
+    let currentAdKey = null;
+
+    function setStatus(msg) {
+      status.textContent = msg;
+    }
+
+    function playAd(event) {
+      if (!event || !event.url) return;
+      if (event.ad_key === currentAdKey) return;
+
+      currentAdKey = event.ad_key;
+      setStatus(event.label || event.ad_key);
+
+      // Fade to black, swap source, fade back
+      overlay.classList.add('fading');
+      setTimeout(() => {
+        video.src = event.url;
+        video.load();
+        video.play().catch(() => {
+          // Autoplay may be blocked; try muted
+          video.muted = true;
+          video.play();
+        });
+        overlay.classList.remove('fading');
+      }, 420);
+    }
+
+    // Fetch current ad on page load
+    fetch('/current')
+      .then(r => r.json())
+      .then(ev => {
+        if (ev && ev.url) {
+          currentAdKey = ev.ad_key;
+          video.src = ev.url;
+          video.load();
+          video.play().catch(() => { video.muted = true; video.play(); });
+          setStatus(ev.label || ev.ad_key || 'playing');
+        }
+      })
+      .catch(() => setStatus('no ad loaded'));
+
+    // Subscribe to SSE for real-time ad changes
+    function connectSSE() {
+      const evtSource = new EventSource('/events');
+
+      evtSource.addEventListener('ad', e => {
+        try {
+          const ev = JSON.parse(e.data);
+          playAd(ev);
+        } catch (err) {
+          console.error('Failed to parse ad event:', err);
+        }
+      });
+
+      evtSource.onerror = () => {
+        setStatus('reconnecting...');
+        evtSource.close();
+        setTimeout(connectSSE, 3000);
+      };
+
+      evtSource.onopen = () => {
+        setStatus('connected');
+      };
+    }
+
+    connectSSE();
+
+    // Prevent context menu and selection in kiosk mode
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('selectstart', e => e.preventDefault());
+  </script>
+</body>
+</html>
